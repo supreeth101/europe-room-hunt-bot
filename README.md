@@ -89,6 +89,21 @@ wg-gesucht's internal city IDs. (An alternative `city_id`/`city_name`-based
 method exists for people who prefer editing structured fields — see the
 comments in `config.example.yaml`.)
 
+Also set `search.applicant_gender` (`male` / `female` / `divers` / `any`) —
+this is your own gender, used to skip listings you're not eligible for
+(wg-gesucht's "Gesucht" field: some flatshares only want a specific
+gender). It defaults to `any` (no filtering) in the example config, since
+that's the safest default for a tool anyone might use, but leaving it as
+`any` means you may get listings back that would decline you. If you used
+`custom_url` above, also set wg-gesucht's own "Gesucht" filter when you
+build that URL — this setting still applies a client-side backstop
+regardless, but the server-side filter is more thorough.
+
+Separately, `search.room_gender_preference` is an optional preference for
+the *current residents'* gender (wg-gesucht's "Bewohner" field) — e.g. if
+you specifically want to live with women, independent of who a listing
+happens to be recruiting. Defaults to `any` (no preference).
+
 ### 4. Write the message
 
 ```bash
@@ -181,16 +196,17 @@ immediately) and prepends a 🚨 warning to the Discord alert when it finds
 one. This is a heuristic, not a guarantee — treat any request for money or
 documents with normal caution regardless of whether it gets flagged.
 
-## Gender-restricted listings
+## Gender filtering
 
 Some wg-gesucht listings are restricted to one gender (e.g. "Frauen-WG" /
-women-only flatshares). `src/searcher.py` reads wg-gesucht's own "who are
-they looking for" icon on each listing and skips anything that doesn't
-match, plus a text-based backstop for listings that state a restriction in
-the title/description without the structured icon. This currently filters
-out female-only listings (matching the default assumption of a male
-applicant) — if you need the opposite or a different rule, it's a small,
-clearly-commented block in `fetch_listings()`.
+women-only flatshares), and some applicants have a preference about who
+they'd be living with. Both are configurable — see `applicant_gender` and
+`room_gender_preference` in step 3 of Setup above. Under the hood,
+`src/searcher.py` uses wg-gesucht's own server-side filters (`wgSea` for who
+a listing is recruiting, `wgFla` for current residents' gender), plus a
+client-side backstop that reads each listing's "who are they looking for"
+icon and title/description text for restrictions the structured field
+missed.
 
 ## Duplicate-contact protection
 

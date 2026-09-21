@@ -23,6 +23,24 @@ search:
   radius_km: 10
   move_in_earliest: "2026-01-01"   # only show listings available on/after this date
 
+  # Your own gender: male | female | divers | any. Filters using
+  # wg-gesucht's own "Gesucht" field (who a listing is recruiting) — a
+  # female-only listing isn't a real option if you're male, so it's
+  # skipped entirely rather than wasting a message on it. "any" applies no
+  # filter at all (you'll see every listing regardless of who it's
+  # recruiting). If you use custom_url above, also set wg-gesucht's own
+  # "Gesucht" filter when building that URL — this setting still applies a
+  # client-side backstop either way, but the server-side filter is more
+  # thorough.
+  applicant_gender: any
+
+  # Optional preference for the *current residents'* gender, independent of
+  # who they're recruiting — wg-gesucht's "Bewohner" field. For example, a
+  # female applicant might still only want to consider WGs where the
+  # existing residents are also female. male | female | divers | any (no
+  # preference, the default).
+  room_gender_preference: any
+
 # Safety limits so the bot paces itself and doesn't look like spam.
 # There's no artificial contact-count cap here: wg-gesucht's real limit
 # (whatever it actually is for your account type) gets detected at send

@@ -24,20 +24,36 @@ HEADERS = {
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
 }
 
-# wg-gesucht marks each WG listing's "who are they looking for" with a small
-# icon whose alt text is exactly one of these phrases (confirmed live on
-# 2026-09-17). "Mitbewohnerin gesucht" = looking for a female flatmate only —
-# skip those. Anything else (male-only, either, no icon at all e.g. plain
-# apartments) is fine for a male applicant.
-FEMALE_ONLY_ALT_TEXT = "Mitbewohnerin gesucht"
+# wg-gesucht's own server-side gender filters, confirmed live on 2026-09-21
+# by setting each dropdown and reading the resulting URL param:
+#   wgSea = "Gesucht"  — the gender of flatmate they're recruiting (your
+#                        eligibility to apply)
+#   wgFla = "Bewohner" — the gender of the WG's *current* residents (a
+#                        preference about who you'd be living with)
+# Both take the same codes; omitting the param means "egal" (no filter).
+GENDER_CODES = {"female": 1, "male": 2, "divers": 3}
 
-# Backstop for listings that state a gender restriction in free text without
-# (or in addition to) the structured icon above.
-FEMALE_ONLY_TEXT_PATTERN = re.compile(
-    r"only girls|girls only|only women|women only|female only|"
-    r"nur (für )?frauen|nur weiblich|sucht weibliche|mädchen gesucht|frauen-wg",
-    re.IGNORECASE,
-)
+# Client-side backstop for listings that state a gender restriction in free
+# text (title/description) without it being reflected in the structured
+# "Gesucht" field wgSea already filters on server-side. Only meaningful for
+# male/female applicants — there's no clean free-text pattern for excluding
+# "divers"-incompatible listings, so that relies on wgSea alone.
+INCOMPATIBLE_ALT_TEXT = {
+    "male": "Mitbewohnerin gesucht",  # female-only wanted
+    "female": "Mitbewohner gesucht",  # male-only wanted
+}
+INCOMPATIBLE_TEXT_PATTERNS = {
+    "male": re.compile(
+        r"only girls|girls only|only women|women only|female only|"
+        r"nur (für )?frauen|nur weiblich|sucht weibliche|mädchen gesucht|frauen-wg",
+        re.IGNORECASE,
+    ),
+    "female": re.compile(
+        r"only boys|boys only|only men|men only|male only|"
+        r"nur (für )?männer|nur männlich|sucht männlichen|männer-wg",
+        re.IGNORECASE,
+    ),
+}
 
 
 def build_search_url(cfg: dict) -> str:
@@ -71,18 +87,31 @@ def build_search_url(cfg: dict) -> str:
         query += f"&categories%5B%5D={cat}"
     for rt in search["rent_types"]:
         query += f"&rent_types%5B%5D={rt}"
+
+    applicant_gender = search.get("applicant_gender", "any")
+    if applicant_gender in GENDER_CODES:
+        query += f"&wgSea={GENDER_CODES[applicant_gender]}"
+
+    room_gender_preference = search.get("room_gender_preference", "any")
+    if room_gender_preference in GENDER_CODES:
+        query += f"&wgFla={GENDER_CODES[room_gender_preference]}"
+
     return f"{BASE_URL}{path}?{query}"
 
 
 def fetch_listings(cfg: dict) -> list[dict]:
     url = build_search_url(cfg)
+    applicant_gender = cfg["search"].get("applicant_gender", "any")
     resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
+    incompatible_alt = INCOMPATIBLE_ALT_TEXT.get(applicant_gender)
+    incompatible_pattern = INCOMPATIBLE_TEXT_PATTERNS.get(applicant_gender)
+
     listings = []
     seen_ids_this_fetch = set()
-    skipped_female_only = 0
+    skipped_gender = 0
     for card in soup.select('div[id^="liste-details-ad-"]'):
         listing_id = card.get("data-id")
         link_tag = card.select_one("h2.truncate_title a")
@@ -100,13 +129,15 @@ def fetch_listings(cfg: dict) -> list[dict]:
         size_match = re.search(r"(\d+)\s?m²", text)
         date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
 
-        gender_icon = card.select_one('img[alt*="gesucht"]')
-        gender_alt = gender_icon.get("alt", "") if gender_icon else ""
-        if gender_alt == FEMALE_ONLY_ALT_TEXT or FEMALE_ONLY_TEXT_PATTERN.search(
-            f"{title} {text}"
-        ):
-            skipped_female_only += 1
-            continue  # female-only flatshare — not a fit, skip entirely
+        if incompatible_alt or incompatible_pattern:
+            gender_icon = card.select_one('img[alt*="gesucht"]')
+            gender_alt = gender_icon.get("alt", "") if gender_icon else ""
+            text_is_incompatible = bool(
+                incompatible_pattern and incompatible_pattern.search(f"{title} {text}")
+            )
+            if gender_alt == incompatible_alt or text_is_incompatible:
+                skipped_gender += 1
+                continue  # not eligible for this listing — skip entirely
 
         listings.append(
             {
@@ -119,7 +150,7 @@ def fetch_listings(cfg: dict) -> list[dict]:
             }
         )
 
-    if skipped_female_only:
-        log.info("Skipped %d female-only listings.", skipped_female_only)
+    if skipped_gender:
+        log.info("Skipped %d listings not open to applicant_gender=%s.", skipped_gender, applicant_gender)
 
     return listings
