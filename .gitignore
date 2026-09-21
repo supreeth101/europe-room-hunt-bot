@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+state.json
+storage_state.json
+*.log
+screenshots/
+.DS_Store
+
+# Personal files generated from the .example templates — never commit these.
+config.yaml
+message_template.txt
+com.roomhunt.bot.plist

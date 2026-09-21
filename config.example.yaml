@@ -1,0 +1,49 @@
+# Copy this file to config.yaml and fill in your own values:
+#   cp config.example.yaml config.yaml
+# config.yaml is gitignored so your personal search criteria never get committed.
+
+search:
+  # RECOMMENDED: build your search on wg-gesucht.de with the filters you
+  # want (city, price, radius, move-in date, room type), then copy the
+  # resulting URL from your browser's address bar and paste it here. This
+  # is the most reliable way to configure the search — it works for any
+  # city without needing to know wg-gesucht's internal numeric IDs.
+  custom_url: ""
+
+  # ALTERNATIVE: build the URL from parts instead of custom_url above.
+  # Only used if custom_url is empty. To find your city's id, start typing
+  # your city on wg-gesucht.de's homepage search box, open your browser's
+  # dev tools network tab, and look for a `city_id=` number in the request
+  # that fires — or just use custom_url instead, it's much easier.
+  city_id: null
+  city_name: ""
+  categories: [0, 1, 2]    # 0=Flatshare room, 1=1-room flat, 2=Flat, 3=House
+  rent_types: [1, 2, 3]    # long term, short term, overnight
+  max_rent: 600            # EUR, "Gesamtmiete" (warm rent incl. utilities)
+  radius_km: 10
+  move_in_earliest: "2026-01-01"   # only show listings available on/after this date
+
+# Safety limits so the bot paces itself and doesn't look like spam.
+# There's no artificial contact-count cap here: wg-gesucht's real limit
+# (whatever it actually is for your account type) gets detected at send
+# time in src/messenger.py when their own upgrade/paywall wall appears,
+# and reported via Discord — safer than guessing a number that might be
+# wrong for your account.
+limits:
+  max_new_contacts_per_run: 5   # pacing per run, not a lifetime cap
+  min_delay_seconds: 8          # human-like pacing between actions
+  max_delay_seconds: 20
+
+# Set to true only once you've tested with --dry-run and reviewed
+# message_template.txt (copy message_template.example.txt to get started).
+live_mode: false
+
+message_template_path: message_template.txt
+
+paths:
+  storage_state: storage_state.json   # saved login session (created by scripts/setup_login.py)
+  state_file: state.json              # tracks seen listings, contacted listings, known conversations
+  log_file: bot.log
+
+# Auto-filled by scripts/setup_login.py after your first manual login.
+inbox_url: null

@@ -1,0 +1,5 @@
+playwright==1.47.0
+beautifulsoup4==4.12.3
+requests==2.32.3
+PyYAML==6.0.2
+python-dotenv==1.0.1
