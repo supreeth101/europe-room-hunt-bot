@@ -125,7 +125,10 @@ def fetch_listings(cfg: dict) -> list[dict]:
         full_url = urljoin(BASE_URL, href)
         text = card.get_text(" ", strip=True)
 
-        price_match = re.search(r"(\d[\d.,]*)\s?€", text)
+        # Germany/Austria show € — Switzerland shows CHF (confirmed live on
+        # a Zürich search on 2026-09-21). Capture whichever is present so
+        # price display isn't silently wrong/missing for Swiss listings.
+        price_match = re.search(r"(\d[\d.,]*)\s?(€|CHF)", text)
         size_match = re.search(r"(\d+)\s?m²", text)
         date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
 
@@ -145,6 +148,7 @@ def fetch_listings(cfg: dict) -> list[dict]:
                 "title": title,
                 "url": full_url,
                 "price": price_match.group(1) if price_match else "?",
+                "currency": price_match.group(2) if price_match else "€",
                 "size": size_match.group(1) if size_match else "?",
                 "available_from": date_match.group(1) if date_match else "?",
             }

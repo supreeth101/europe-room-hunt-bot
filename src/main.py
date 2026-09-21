@@ -64,7 +64,8 @@ def render_template(template_text: str, listing: dict, cfg: dict) -> str:
 def _listing_alert(l: dict, prefix: str) -> str:
     return (
         f"{prefix} **{l['title']}**\n"
-        f"{l['price']} € · {l['size']} m² · from {l['available_from']}\n{l['url']}"
+        f"{l['price']} {l.get('currency', '€')} · {l['size']} m² · "
+        f"from {l['available_from']}\n{l['url']}"
     )
 
 
