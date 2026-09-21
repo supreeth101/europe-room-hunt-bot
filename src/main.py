@@ -1,9 +1,12 @@
 import argparse
+import fcntl
 import logging
+import logging.handlers
 import re
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -14,16 +17,31 @@ from .messenger import send_message
 from .notify import send_discord
 from .scam_check import find_scam_flags
 from .searcher import fetch_listings
-from .state import load_state, save_state
+from .state import load_state, save_state, StateCorrupted
 
 log = logging.getLogger("roomhunt")
+
+# Exceptions worth one retry before giving up on a listing — transient
+# network hiccups, not a real problem with the listing or the site.
+TRANSIENT_ERROR_MARKERS = (
+    "Timeout",
+    "ERR_NETWORK_CHANGED",
+    "ERR_CONNECTION",
+    "ERR_INTERNET_DISCONNECTED",
+    "ERR_NAME_NOT_RESOLVED",
+)
 
 
 def setup_logging(log_file: str) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
+        handlers=[
+            logging.handlers.RotatingFileHandler(
+                log_file, maxBytes=5_000_000, backupCount=3
+            ),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
 
 
@@ -50,9 +68,61 @@ def _listing_alert(l: dict, prefix: str) -> str:
     )
 
 
+def _is_transient(exc: Exception) -> bool:
+    text = str(exc)
+    return any(marker in text for marker in TRANSIENT_ERROR_MARKERS)
+
+
+def _send_with_retry(page, cfg: dict, l: dict, message: str) -> tuple[bool, str]:
+    """One retry for transient network errors only — never for anything that
+    might mean the message actually went through (ambiguous failures are
+    handled by messenger.send_message itself, which errs toward reporting
+    failure rather than guessing success)."""
+    for attempt in (1, 2):
+        try:
+            return send_message(page, cfg, l, message)
+        except SessionExpired:
+            raise
+        except Exception as e:
+            if attempt == 1 and _is_transient(e):
+                log.warning(
+                    "Transient error sending to %s (%s) — retrying once", l["url"], e
+                )
+                time.sleep(5)
+                continue
+            log.exception("Unexpected error sending to %s", l["url"])
+            return False, f"Unexpected error: {e}"
+    return False, "exhausted retries"  # unreachable, defensive only
+
+
 def run(dry_run: bool) -> None:
     cfg = load_config()
     setup_logging(cfg["paths"]["log_file"])
+
+    # Guard against two instances running at once (e.g. a slow run still
+    # going when the next scheduled one fires) — without this, both could
+    # read the same "not yet contacted" state and each send their own
+    # message to the same listing. The lock is released automatically if
+    # the process dies, so a crash can't leave it stuck.
+    lock_path = Path(cfg["_root"]) / "bot.lock"
+    lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log.warning("Another instance appears to be running — skipping this run.")
+        return
+
+    try:
+        _run_locked(cfg, dry_run)
+    except StateCorrupted as e:
+        log.error(str(e))
+        send_discord(cfg, f"🚨 {e}")
+    finally:
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        lock_file.close()
+
+
+def _run_locked(cfg: dict, dry_run: bool) -> None:
     state = load_state(cfg["paths"]["state_file"])
 
     effective_live = cfg["live_mode"] and not dry_run
@@ -89,6 +159,23 @@ def run(dry_run: bool) -> None:
     contacted = state.setdefault("contacted", {})
     limits = cfg["limits"]
 
+    # Entries with success=None are ones a previous run marked "about to
+    # send" but never got to finalize (crash, kill, power loss mid-send).
+    # They're already in seen_ids/contacted so they'll never be retried —
+    # correct default for "never duplicate," but the outcome is genuinely
+    # unknown, so flag it once for a human to check rather than staying
+    # silently unresolved forever.
+    unresolved = [
+        (k, v) for k, v in contacted.items() if v.get("success") is None and not v.get("flagged")
+    ]
+    for listing_id, info in unresolved:
+        send_discord(
+            cfg,
+            f"⚠️ A previous run was interrupted while contacting **{info['title']}** — "
+            f"unclear if the message actually sent. Please check manually.\n{info['url']}",
+        )
+        info["flagged"] = True
+
     with open(cfg["message_template_path"], "r", encoding="utf-8") as f:
         template_text = f.read()
 
@@ -109,9 +196,9 @@ def run(dry_run: bool) -> None:
             try:
                 # Check which listings already have a conversation on
                 # wg-gesucht — whether started by this bot or manually by
-                # your brother — BEFORE deciding what's safe to auto-send.
-                # Without this, a listing he messages himself between runs
-                # looks "new" to the bot and gets auto-messaged again.
+                # you — BEFORE deciding what's safe to auto-send. Without
+                # this, a listing you message yourself between runs looks
+                # "new" to the bot and gets auto-messaged again.
                 log.info("Checking for existing conversations...")
                 try:
                     existing_conversation_listing_ids = sync_conversation_listing_map(
@@ -153,13 +240,24 @@ def run(dry_run: bool) -> None:
 
                 for l in to_contact:
                     message = render_template(template_text, l, cfg)
-                    try:
-                        success, reason = send_message(page, cfg, l, message)
-                    except SessionExpired:
-                        raise
-                    except Exception as e:
-                        log.exception("Unexpected error sending to %s", l["url"])
-                        success, reason = False, f"Unexpected error: {e}"
+
+                    # Mark + persist BEFORE attempting the send. If this
+                    # process dies mid-send, the listing is already
+                    # seen+contacted next run (never retried — never
+                    # duplicated), just with an outcome to verify by hand.
+                    contacted[l["id"]] = {
+                        "title": l["title"],
+                        "url": l["url"],
+                        "sent_at": None,
+                        "success": None,
+                        "reason": "in progress",
+                    }
+                    seen_ids.add(l["id"])
+                    state["seen_ids"] = list(seen_ids)
+                    save_state(cfg["paths"]["state_file"], state)
+
+                    success, reason = _send_with_retry(page, cfg, l, message)
+
                     contacted[l["id"]] = {
                         "title": l["title"],
                         "url": l["url"],
@@ -167,8 +265,6 @@ def run(dry_run: bool) -> None:
                         "success": success,
                         "reason": reason,
                     }
-                    seen_ids.add(l["id"])
-                    state["seen_ids"] = list(seen_ids)
                     if success:
                         send_discord(cfg, f"✅ Sent message to landlord: **{l['title']}**\n{l['url']}")
                     else:

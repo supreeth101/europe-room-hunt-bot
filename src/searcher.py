@@ -81,12 +81,16 @@ def fetch_listings(cfg: dict) -> list[dict]:
     soup = BeautifulSoup(resp.text, "html.parser")
 
     listings = []
+    seen_ids_this_fetch = set()
     skipped_female_only = 0
     for card in soup.select('div[id^="liste-details-ad-"]'):
         listing_id = card.get("data-id")
         link_tag = card.select_one("h2.truncate_title a")
         if not listing_id or not link_tag:
             continue
+        if listing_id in seen_ids_this_fetch:
+            continue  # wg-gesucht can render a promoted listing twice on one page
+        seen_ids_this_fetch.add(listing_id)
         title = link_tag.get_text(strip=True)
         href = link_tag.get("href", "")
         full_url = urljoin(BASE_URL, href)

@@ -194,11 +194,37 @@ clearly-commented block in `fetch_listings()`.
 
 ## Duplicate-contact protection
 
-Before auto-sending to any "new" listing, the bot checks your actual
-wg-gesucht conversation list (not just its own memory) via
-`sync_conversation_listing_map()` in `src/inbox.py`. So if you message a
-landlord yourself between scheduled runs, the bot sees that conversation
-already exists next time and skips it instead of sending a duplicate.
+Several independent safeguards, since a duplicate message to a landlord is
+one of the worst failure modes:
+
+- **Checks real conversations, not just its own memory.** Before
+  auto-sending to any "new" listing, `sync_conversation_listing_map()` in
+  `src/inbox.py` checks your actual wg-gesucht conversation list. If you
+  message a landlord yourself between scheduled runs, the bot sees that
+  conversation already exists and skips it.
+- **Single-instance lock.** `src/main.py` takes an exclusive file lock
+  (`bot.lock`) for the duration of a run. If a run is still going when the
+  next scheduled one fires (a slow run, a network hang), the second
+  instance skips itself instead of both processes racing on the same
+  "not yet contacted" state.
+- **Mark-before-send.** A listing is recorded as contacted (and excluded
+  from future runs) *before* the send is attempted, not after. If the
+  process is killed mid-send, the listing is never retried — worst case its
+  outcome is unknown and gets flagged once via Discord for you to check by
+  hand, but it can never be auto-sent twice.
+- **Dedup within a single search.** `src/searcher.py` drops repeated ad IDs
+  on the same results page (wg-gesucht can render a promoted listing
+  twice), so one listing can't end up in the send queue twice in one run.
+
+None of this can undo a message already sent — it's all about making sure
+each real listing only ever gets one automated attempt.
+
+- **Atomic, corruption-safe state saves.** `src/state.py` writes to a temp
+  file and renames it over `state.json`, so a crash mid-write can't leave a
+  half-written file. If `state.json` is ever unreadable anyway (disk
+  corruption, manual editing gone wrong), the bot refuses to run live and
+  alerts loudly rather than treating it as "nothing contacted yet" — the
+  one thing that could actually cause mass re-contacting.
 
 ## Troubleshooting
 

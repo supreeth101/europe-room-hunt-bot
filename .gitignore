@@ -4,6 +4,8 @@ __pycache__/
 .env
 state.json
 storage_state.json
+*.corrupted
+bot.lock
 *.log
 screenshots/
 .DS_Store
