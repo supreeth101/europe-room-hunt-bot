@@ -77,32 +77,29 @@ Your session will eventually expire (days to weeks) — if the bot posts a
 ### 3. Configure your search
 
 ```bash
-cp config.example.yaml config.yaml
+python scripts/configure.py
 ```
 
-`config.yaml` is gitignored, so your personal search criteria and city never
-get committed. The easiest way to fill it in: build your search on
-wg-gesucht.de itself with the filters you want (city, price, radius, room
-type, move-in date), copy the resulting URL from your browser's address bar,
-and paste it in as `search.custom_url`. That's it — no need to know
-wg-gesucht's internal city IDs. (An alternative `city_id`/`city_name`-based
-method exists for people who prefer editing structured fields — see the
-comments in `config.example.yaml`.)
+An interactive wizard — no YAML editing needed. It asks for your city (by
+name — "Munich", "Zurich", "Vienna", whatever; it resolves this against
+wg-gesucht's own city lookup, so you never need their internal numeric
+IDs), room type, budget, radius, move-in date, your own gender
+(`applicant_gender`, used to skip listings you're not eligible for — some
+flatshares only want a specific gender), an optional preference for
+current residents' gender (`room_gender_preference`), and how often to
+check for new listings. It writes `config.yaml` (gitignored, so none of
+this gets committed) and is safe to re-run any time you want to change
+your criteria.
 
-Also set `search.applicant_gender` (`male` / `female` / `divers` / `any`) —
-this is your own gender, used to skip listings you're not eligible for
-(wg-gesucht's "Gesucht" field: some flatshares only want a specific
-gender). It defaults to `any` (no filtering) in the example config, since
-that's the safest default for a tool anyone might use, but leaving it as
-`any` means you may get listings back that would decline you. If you used
-`custom_url` above, also set wg-gesucht's own "Gesucht" filter when you
-build that URL — this setting still applies a client-side backstop
-regardless, but the server-side filter is more thorough.
-
-Separately, `search.room_gender_preference` is an optional preference for
-the *current residents'* gender (wg-gesucht's "Bewohner" field) — e.g. if
-you specifically want to live with women, independent of who a listing
-happens to be recruiting. Defaults to `any` (no preference).
+Prefer editing YAML by hand instead? `cp config.example.yaml config.yaml`
+and fill it in directly — every field is commented there. The one thing
+the wizard can't do for you: if you'd rather build your search visually on
+wg-gesucht.de itself (any filter, not just the ones the wizard asks about)
+and paste the resulting URL, set that as `search.custom_url` and it takes
+priority over everything else in `search:`. If you do that, also set
+wg-gesucht's own "Gesucht" filter when building the URL — the gender
+settings above still apply a client-side backstop either way, but the
+server-side filter is more thorough.
 
 ### 4. Write the message
 
@@ -268,7 +265,8 @@ each real listing only ever gets one automated attempt.
 ## Project layout
 
 ```
-config.example.yaml            template — copy to config.yaml and fill in
+scripts/configure.py           interactive wizard — writes config.yaml, no YAML editing needed
+config.example.yaml            template — for editing config.yaml by hand instead
 message_template.example.txt   template — copy to message_template.txt and fill in
 scripts/generate_plist.py      builds the launchd plist from config.yaml's schedule.mode
 .env.example                   template — copy to .env and add your Discord webhooks

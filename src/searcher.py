@@ -16,6 +16,20 @@ SEARCH_PATH_TEMPLATE = (
     "/wg-zimmer-und-1-zimmer-wohnungen-und-wohnungen-in-{city}.{city_id}.0+1+2.1.0.html"
 )
 
+# German-locale ASCII transliteration for the city slug in the URL path.
+# Confirmed live (2026-09-21): the numeric city_id is what actually
+# determines results, but the slug still has to be a plain-ASCII ready
+# match — a percent-encoded umlaut (e.g. "M%C3%BCnchen") 404s, while the
+# ASCII transliteration wg-gesucht itself uses ("Muenchen") works.
+UMLAUT_MAP = str.maketrans(
+    {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+)
+
+
+def _url_safe_city_slug(city_name: str) -> str:
+    slug = city_name.translate(UMLAUT_MAP).replace(" ", "-")
+    return re.sub(r"[^A-Za-z0-9-]", "", slug) or "Stadt"
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -68,8 +82,14 @@ def build_search_url(cfg: dict) -> str:
             "or set search.city_id and search.city_name — see config.example.yaml."
         )
 
+    # Confirmed live (2026-09-21): only the numeric city_id actually
+    # determines results — this slug is cosmetic (wg-gesucht renders the
+    # right city's search page even with a nonsense slug). Still URL-encode
+    # it properly rather than relying on that, since an un-encoded umlaut
+    # or space in the raw URL string is asking for trouble.
     path = SEARCH_PATH_TEMPLATE.format(
-        city=search["city_name"], city_id=search["city_id"]
+        city=_url_safe_city_slug(str(search["city_name"])),
+        city_id=search["city_id"],
     )
     params = {
         "offer_filter": 1,
