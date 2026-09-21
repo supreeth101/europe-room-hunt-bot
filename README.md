@@ -15,21 +15,6 @@ Switzerland:
 4. Checks your wg-gesucht inbox for replies and pings a Discord channel when
    one comes in, flagging common rental-scam red flags along the way.
 
-## Before you start: two important caveats
-
-- **wg-gesucht's terms of service prohibit automated/bot use of the site.**
-  This is built for personal, low-volume use (a handful of messages a day,
-  human-like delays between actions) — not scraping at scale. Even so, there
-  is real risk of the account getting flagged or suspended. Don't run this
-  on an account you can't afford to lose, and don't crank up
-  `max_new_contacts_per_run` or lower the delays in `config.yaml`.
-- **Free wg-gesucht accounts have a real cap on contact requests** before
-  the site demands a paid package. The exact number isn't published and
-  isn't guessed here — `src/messenger.py` detects wg-gesucht's own
-  upgrade/paywall prompt if and when it actually appears, and reports it via
-  Discord distinctly from a normal send failure, rather than the bot
-  enforcing some made-up limit.
-
 ## Quick start
 
 ```bash
