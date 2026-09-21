@@ -1,7 +1,8 @@
-# germany-room-hunt-bot
+# europe-room-hunt-bot
 
-Automates the tedious part of hunting for a room/flat on wg-gesucht.de,
-Germany's biggest shared-flat and apartment marketplace:
+Automates the tedious part of hunting for a room/flat on wg-gesucht.de, the
+biggest shared-flat and apartment marketplace for Germany, Austria, and
+Switzerland:
 
 1. Searches wg-gesucht.de on a schedule for new listings matching your
    criteria (city, budget, radius, move-in date, room type).
@@ -33,7 +34,7 @@ Germany's biggest shared-flat and apartment marketplace:
 
 ```bash
 git clone <this-repo-url>
-cd germany-room-hunt-bot
+cd europe-room-hunt-bot
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -128,26 +129,40 @@ Check Discord for the "✅ Sent message" alerts, and log into wg-gesucht
 yourself to confirm the messages actually look right on a listing or two
 before trusting it fully.
 
-### 7. Schedule it
+### 7. Pick a schedule mode
 
-**macOS**, using launchd (runs 8am/noon/8pm by default — edit the `Hour`
-values in `com.roomhunt.bot.plist.template` to change that, then re-run the
-install script):
+Set `schedule.mode` in `config.yaml` to control how often the bot checks for
+new listings:
+
+| Mode | Interval | Tradeoff |
+|---|---|---|
+| `aggressive` | every 1 hour | Catches listings fastest; most bot-like pattern, highest detection risk |
+| `laid_back` | every 3 hours | |
+| `normal` | every 6 hours | Lowest risk, slowest to react (default) |
+
+### 8. Schedule it
+
+**macOS**, using launchd — generates the schedule from `schedule.mode` above
+and loads it:
 
 ```bash
 ./scripts/install_launchd.sh
 ```
 
+Re-run this any time you change `schedule.mode` to apply the new interval.
 To stop it: `launchctl unload ~/Library/LaunchAgents/com.roomhunt.bot.plist`
 
 Logs land in `bot.log` (the app's own log) and `launchd.out.log` /
 `launchd.err.log` (anything launchd itself captures).
 
-**Linux**, using cron — add a line like this with `crontab -e` (runs the
-same 8am/noon/8pm schedule; adjust the venv/repo paths to match your setup):
+**Linux**, using cron — add a line like this with `crontab -e`, matching
+your chosen mode's interval in minutes (adjust the venv/repo paths too):
 
 ```cron
-0 8,12,20 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
+# aggressive (every 1h) / laid_back (every 3h) / normal (every 6h):
+0 */1 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
+0 */3 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
+0 */6 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
 ```
 
 **Either way**, this only runs while the machine is on and awake. For 24/7
@@ -197,16 +212,23 @@ already exists next time and skips it instead of sending a duplicate.
   (never by having an AI assistant or anyone else handle your password). If
   it stops catching replies after a wg-gesucht redesign, open your messages
   page yourself and compare against the selectors in `src/inbox.py`.
-- **Session expired constantly**: wg-gesucht may be logging out headless
-  sessions faster than expected. Re-run `setup_login.py`; if it keeps
-  happening, this may need cookie/fingerprint tuning.
+- **Session expired constantly**: wg-gesucht uses a short-lived access token
+  plus a long-lived refresh token (the refresh token is what actually keeps
+  you logged in). `src/browser_session.py` re-saves `storage_state.json`
+  after every run specifically so any silent token renewal carries forward
+  instead of being discarded — this should make logins last close to the
+  refresh token's own lifetime (roughly a year). If it's still expiring
+  fast, check the "Stay logged in" box during `setup_login.py`, and check
+  whether `X-Refresh-Token` in `storage_state.json` has a far-future expiry
+  (a short one there means the account/browser wasn't actually granted a
+  persistent login).
 
 ## Project layout
 
 ```
 config.example.yaml            template — copy to config.yaml and fill in
 message_template.example.txt   template — copy to message_template.txt and fill in
-com.roomhunt.bot.plist.template  launchd template, filled in by install_launchd.sh
+scripts/generate_plist.py      builds the launchd plist from config.yaml's schedule.mode
 .env.example                   template — copy to .env and add your Discord webhooks
 scripts/setup_login.py         one-time interactive login
 scripts/install_launchd.sh     generates + installs the macOS launchd schedule

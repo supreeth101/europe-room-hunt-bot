@@ -38,6 +38,15 @@ limits:
 # message_template.txt (copy message_template.example.txt to get started).
 live_mode: false
 
+# How often the scheduled job checks for new listings (used by
+# scripts/generate_plist.py / install_launchd.sh). Re-run
+# ./scripts/install_launchd.sh after changing this to apply it.
+#   aggressive: every 1 hour  — fastest, most bot-like pattern
+#   laid_back:  every 3 hours
+#   normal:     every 6 hours — lowest risk, slowest to react
+schedule:
+  mode: normal
+
 message_template_path: message_template.txt
 
 paths:

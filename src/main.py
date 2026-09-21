@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from playwright.sync_api import sync_playwright
 
-from .browser_session import SessionExpired, new_context
+from .browser_session import SessionExpired, new_context, persist_storage_state
 from .config import load_config
 from .inbox import check_for_replies, sync_conversation_listing_map
 from .messenger import send_message
@@ -197,6 +197,7 @@ def run(dry_run: bool) -> None:
                         )
                     send_discord(cfg, msg, channel="replies")
             finally:
+                persist_storage_state(context, cfg)
                 context.close()
                 browser.close()
     except SessionExpired as e:

@@ -32,6 +32,8 @@ def main() -> None:
 
         print("\nA browser window has opened.")
         print("1. Log in to wg-gesucht.de yourself in that window.")
+        print("   If you see a 'Stay logged in' / 'Angemeldet bleiben' checkbox, check it —")
+        print("   it extends how long the session lasts before you need to log in again.")
         print("2. Solve any captcha it shows you.")
         print("3. Once you can see your account (e.g. your name top-right), come back here.\n")
         input("Press Enter once you are fully logged in... ")

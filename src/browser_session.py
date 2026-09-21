@@ -34,6 +34,23 @@ def new_context(playwright, cfg: dict, headless: bool = True):
     return browser, context
 
 
+def persist_storage_state(context, cfg: dict) -> None:
+    """
+    wg-gesucht uses a short-lived access token plus a long-lived refresh
+    token; a real browser silently renews the access token via JS before it
+    expires. If we only ever replay the cookie snapshot from the original
+    manual login, that renewal (when it happens during an automated run)
+    gets thrown away the moment the browser closes, and the next run starts
+    from the same aging snapshot again. Re-saving after every run carries
+    any such renewal forward, so the login should last far longer in
+    practice than a single static snapshot would.
+    """
+    try:
+        context.storage_state(path=cfg["paths"]["storage_state"])
+    except Exception:
+        log.exception("Failed to persist refreshed session state")
+
+
 def run_with_session(cfg: dict, fn, headless: bool = True):
     """Open a browser with the saved session, run fn(page), always close up."""
     with sync_playwright() as p:
