@@ -30,11 +30,31 @@ Switzerland:
   Discord distinctly from a normal send failure, rather than the bot
   enforcing some made-up limit.
 
-## Setup
+## Quick start
 
 ```bash
 git clone <this-repo-url>
 cd europe-room-hunt-bot
+./start.sh
+```
+
+That's it — `start.sh` sets up everything Python-related on its own (first
+run only), then walks you through the rest with plain-English prompts: your
+search criteria (by answering questions, not editing files), Discord
+alerts, your message to landlords, logging in, a safe test run, and turning
+on automatic scheduling. No command line experience beyond running that one
+command is needed. It's safe to run again any time — anything already set
+up gets skipped automatically, and it'll ask before changing anything.
+
+The sections below explain what each piece does and how to do it by hand
+instead, if you'd rather have full control over each step (or need to
+troubleshoot something `start.sh` did for you).
+
+## Manual setup
+
+### 0. Environment (start.sh does this automatically)
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -167,15 +187,16 @@ To stop it: `launchctl unload ~/Library/LaunchAgents/com.roomhunt.bot.plist`
 Logs land in `bot.log` (the app's own log) and `launchd.out.log` /
 `launchd.err.log` (anything launchd itself captures).
 
-**Linux**, using cron — add a line like this with `crontab -e`, matching
-your chosen mode's interval in minutes (adjust the venv/repo paths too):
+**Linux**, using cron:
 
-```cron
-# aggressive (every 1h) / laid_back (every 3h) / normal (every 6h):
-0 */1 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
-0 */3 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
-0 */6 * * * cd /path/to/germany-room-hunt-bot && .venv/bin/python -m src.main >> launchd.out.log 2>&1
+```bash
+python scripts/install_cron.py
 ```
+
+Reads `schedule.mode` and installs (or updates) a single crontab line for
+it — only ever touches its own marked line, never your other cron jobs. To
+remove it: `crontab -e` and delete the line containing
+`# europe-room-hunt-bot`.
 
 **Either way**, this only runs while the machine is on and awake. For 24/7
 coverage regardless of your own computer, run it on a small always-on VM
@@ -265,6 +286,8 @@ each real listing only ever gets one automated attempt.
 ## Project layout
 
 ```
+start.sh                       the one command to run — sets up the environment, then runs onboard.py
+scripts/onboard.py             interactive wizard covering every setup step, skips what's already done
 scripts/configure.py           interactive wizard — writes config.yaml, no YAML editing needed
 config.example.yaml            template — for editing config.yaml by hand instead
 message_template.example.txt   template — copy to message_template.txt and fill in
@@ -272,6 +295,7 @@ scripts/generate_plist.py      builds the launchd plist from config.yaml's sched
 .env.example                   template — copy to .env and add your Discord webhooks
 scripts/setup_login.py         one-time interactive login
 scripts/install_launchd.sh     generates + installs the macOS launchd schedule
+scripts/install_cron.py        generates + installs the Linux cron schedule
 src/searcher.py                scrapes search results, filters gender-restricted listings (no login needed)
 src/messenger.py               sends the contact message (needs login)
 src/inbox.py                   checks for replies and existing conversations (needs login)
