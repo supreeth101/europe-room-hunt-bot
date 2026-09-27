@@ -47,11 +47,12 @@ HEADERS = {
 # Both take the same codes; omitting the param means "egal" (no filter).
 GENDER_CODES = {"female": 1, "male": 2, "divers": 3}
 
-# Client-side backstop for listings that state a gender restriction in free
-# text (title/description) without it being reflected in the structured
-# "Gesucht" field wgSea already filters on server-side. Only meaningful for
-# male/female applicants — there's no clean free-text pattern for excluding
-# "divers"-incompatible listings, so that relies on wgSea alone.
+# Client-side gender filter for male/female applicants: the card's
+# "... gesucht" icon (structured "Gesucht" field) plus free-text
+# restrictions in the title/description. This is the primary filter for
+# male/female (wgSea isn't sent for them — see build_search_url). There's
+# no clean pattern for excluding "divers"-incompatible listings, so that
+# relies on wgSea alone.
 INCOMPATIBLE_ALT_TEXT = {
     "male": "Mitbewohnerin gesucht",  # female-only wanted
     "female": "Mitbewohner gesucht",  # male-only wanted
@@ -108,8 +109,14 @@ def build_search_url(cfg: dict) -> str:
     for rt in search["rent_types"]:
         query += f"&rent_types%5B%5D={rt}"
 
+    # wgSea is deliberately NOT sent for male/female: it also drops listings
+    # with no gender specified ("keine Angaben"), which are open to everyone
+    # (confirmed live 2026-09-27 — a matching Kaiserslautern listing only
+    # appeared once wgSea was removed). fetch_listings' client-side check
+    # skips the genuinely incompatible ones instead. "divers" has no such
+    # client-side check, so it still relies on wgSea.
     applicant_gender = search.get("applicant_gender", "any")
-    if applicant_gender in GENDER_CODES:
+    if applicant_gender in GENDER_CODES and applicant_gender not in INCOMPATIBLE_ALT_TEXT:
         query += f"&wgSea={GENDER_CODES[applicant_gender]}"
 
     room_gender_preference = search.get("room_gender_preference", "any")

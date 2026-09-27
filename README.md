@@ -101,10 +101,10 @@ and fill it in directly — every field is commented there. The one thing
 the wizard can't do for you: if you'd rather build your search visually on
 wg-gesucht.de itself (any filter, not just the ones the wizard asks about)
 and paste the resulting URL, set that as `search.custom_url` and it takes
-priority over everything else in `search:`. If you do that, also set
-wg-gesucht's own "Gesucht" filter when building the URL — the gender
-settings above still apply a client-side backstop either way, but the
-server-side filter is more thorough.
+priority over everything else in `search:`. Leave wg-gesucht's own
+"Gesucht" filter unset when building that URL — it hides listings that
+don't specify a gender (which you're eligible for); the bot's own gender
+check still skips listings you aren't eligible for.
 
 ### 4. Write the message
 
@@ -204,12 +204,13 @@ documents with normal caution regardless of whether it gets flagged.
 Some wg-gesucht listings are restricted to one gender (e.g. "Frauen-WG" /
 women-only flatshares), and some applicants have a preference about who
 they'd be living with. Both are configurable — see `applicant_gender` and
-`room_gender_preference` in step 3 of Setup above. Under the hood,
-`src/searcher.py` uses wg-gesucht's own server-side filters (`wgSea` for who
-a listing is recruiting, `wgFla` for current residents' gender), plus a
-client-side backstop that reads each listing's "who are they looking for"
-icon and title/description text for restrictions the structured field
-missed.
+`room_gender_preference` in step 3 of Setup above. Under the hood, for
+`male`/`female` `src/searcher.py` reads each listing's "who are they looking
+for" icon plus its title/description text and skips the ones that exclude
+you. It deliberately doesn't use wg-gesucht's own "Gesucht" filter (`wgSea`)
+for this: that filter also hides listings with no gender specified, which
+are open to everyone. `divers` still uses `wgSea`, and
+`room_gender_preference` uses wg-gesucht's `wgFla` filter.
 
 ## Duplicate-contact protection
 
