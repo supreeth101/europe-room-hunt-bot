@@ -28,10 +28,10 @@ search:
   # female-only listing isn't a real option if you're male, so it's
   # skipped entirely rather than wasting a message on it. "any" applies no
   # filter at all (you'll see every listing regardless of who it's
-  # recruiting). If you use custom_url above, also set wg-gesucht's own
-  # "Gesucht" filter when building that URL — this setting still applies a
-  # client-side backstop either way, but the server-side filter is more
-  # thorough.
+  # recruiting). If you use custom_url above, leave wg-gesucht's own
+  # "Gesucht" filter unset when building that URL — it also hides listings
+  # with no gender specified, which are open to everyone. This setting's
+  # own check still skips the ones you aren't eligible for.
   applicant_gender: any
 
   # Optional preference for the *current residents'* gender, independent of
